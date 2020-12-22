@@ -321,6 +321,7 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
     private static final ArrayList<Item> creative354 = new ArrayList<>();
     private static final ArrayList<Item> creative389 = new ArrayList<>();
     private static final ArrayList<Item> creative407 = new ArrayList<>();
+    private static final ArrayList<Item> creative419 = new ArrayList<>();
 
     @SuppressWarnings("unchecked")
     private static void initCreativeItems() {
@@ -399,10 +400,19 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
             }
         }
 
-        // Creative inventory for 407+
+        // Creative inventory for 407, 408
         for (Map map : new Config(Config.YAML).loadFromStream(Server.class.getClassLoader().getResourceAsStream("creativeitems407.json")).getMapList("items")) {
             try {
                 addCreativeItem(v1_16_0, Item.get((int) map.get("id"), (int) map.getOrDefault("damage", 0), 1, map.get("nbt_hex") != null ? Utils.parseHexBinary((String) map.get("nbt_hex")) : new byte[0]));
+            } catch (Exception e) {
+                MainLogger.getLogger().logException(e);
+            }
+        }
+
+        // Creative inventory for 419+ (vanilla data from ProxyPass)
+        for (Map map : new Config(Config.YAML).loadFromStream(Server.class.getClassLoader().getResourceAsStream("creativeitems407.json")).getMapList("items")) {
+            try {
+                addCreativeItem(v1_16_100, Item.fromVanillaJson(v1_16_100, map));
             } catch (Exception e) {
                 MainLogger.getLogger().logException(e);
             }
@@ -419,6 +429,7 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
         Item.creative354.clear();
         Item.creative389.clear();
         Item.creative407.clear();
+        Item.creative419.clear();
     }
 
     public static ArrayList<Item> getCreativeItems() {
@@ -458,6 +469,7 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
                 return new ArrayList<>(Item.creative389);
             case v1_16_0:
             case v1_16_20:
+                return new ArrayList<>(Item.creative407);
             case v1_16_100_0:
             case v1_16_100_51:
             case v1_16_100_52:
@@ -466,14 +478,14 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
             case v1_16_200:
             case v1_16_210_50:
             case v1_16_210_53:
-                return new ArrayList<>(Item.creative407);
+                return new ArrayList<>(Item.creative419);
             default:
                 throw new IllegalArgumentException("Tried to get creative items for unsupported protocol version: " + protocol);
         }
     }
 
     public static void addCreativeItem(Item item) {
-        addCreativeItem(389, item);
+        addCreativeItem(v1_16_100, item);
     }
 
     public static void addCreativeItem(int protocol, Item item) {
@@ -503,6 +515,9 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
             case v1_16_0:
                 Item.creative407.add(item.clone());
                 break;
+            case v1_16_100:
+                Item.creative419.add(item.clone());
+                break;
             default:
                 throw new IllegalArgumentException("Tried to register creative items for unsupported protocol version: " + protocol);
         }
@@ -511,12 +526,12 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
     public static void removeCreativeItem(Item item) {
         int index = getCreativeItemIndex(item);
         if (index != -1) {
-            Item.creative407.remove(index);
+            Item.creative419.remove(index);
         }
     }
 
     public static boolean isCreativeItem(Item item) {
-        for (Item aCreative : Item.creative407) {
+        for (Item aCreative : Item.creative419) {
             if (item.equals(aCreative, !item.isTool())) {
                 return true;
             }
@@ -525,12 +540,12 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
     }
 
     public static Item getCreativeItem(int index) {
-        return (index >= 0 && index < Item.creative407.size()) ? Item.creative407.get(index) : null;
+        return (index >= 0 && index < Item.creative419.size()) ? Item.creative419.get(index) : null;
     }
 
     public static int getCreativeItemIndex(Item item) {
-        for (int i = 0; i < Item.creative407.size(); i++) {
-            if (item.equals(Item.creative407.get(i), !item.isTool())) {
+        for (int i = 0; i < Item.creative419.size(); i++) {
+            if (item.equals(Item.creative419.get(i), !item.isTool())) {
                 return i;
             }
         }
@@ -1212,5 +1227,33 @@ public class Item implements Cloneable, BlockID, ItemID, ProtocolInfo {
         } catch (CloneNotSupportedException e) {
             return null;
         }
+    }
+
+    public static Item fromVanillaJson(int protocol, Map<String, Object> map) {
+        String nbt = (String) map.get("nbt_b64");
+        byte[] nbtBytes;
+        if (nbt != null) {
+            nbtBytes = Base64.getDecoder().decode(nbt);
+        } else {
+            nbt = (String) map.getOrDefault("nbt_hex", null);
+            if (nbt == null) {
+                nbtBytes = new byte[0];
+            } else {
+                nbtBytes = Utils.parseHexBinary(nbt);
+            }
+        }
+        int legacyFullId = RuntimeItems.getRuntimeMapping(protocol).getLegacyFullId(Utils.toInt(map.get("id")));
+        int id = RuntimeItems.getId(legacyFullId);
+        OptionalInt meta = RuntimeItems.hasData(legacyFullId)? OptionalInt.of(RuntimeItems.getData(legacyFullId)) : OptionalInt.empty();
+        if (map.containsKey("damage")) {
+            int jsonMeta = Utils.toInt(map.get("damage"));
+            if (jsonMeta != Short.MAX_VALUE) {
+                if (meta.isPresent() && jsonMeta != meta.getAsInt()) {
+                    throw new RuntimeException("Conflicting damage value");
+                }
+                meta = OptionalInt.of(jsonMeta);
+            }
+        }
+        return get(id, meta.orElse(0), Utils.toInt(map.getOrDefault("count", 1)), nbtBytes);
     }
 }

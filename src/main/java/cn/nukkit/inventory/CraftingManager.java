@@ -59,9 +59,91 @@ public class CraftingManager {
     @SuppressWarnings("unchecked")
     public CraftingManager() {
         MainLogger.getLogger().debug("Loading recipes...");
+        List<Map> recipes_419 = new Config(Config.YAML).loadFromStream(Server.class.getClassLoader().getResourceAsStream("recipes419.json")).getRootSection().getMapList("recipes");
         List<Map> recipes_388 = new Config(Config.YAML).loadFromStream(Server.class.getClassLoader().getResourceAsStream("recipes388.json")).getRootSection().getMapList("recipes");
         List<Map> recipes_332 = new Config(Config.YAML).loadFromStream(Server.class.getClassLoader().getResourceAsStream("recipes332.json")).getMapList("recipes");
         List<Map> recipes_313 = new Config(Config.YAML).loadFromStream(Server.class.getClassLoader().getResourceAsStream("recipes313.json")).getMapList("recipes");
+
+        for (Map<String, Object> recipe : recipes_419) {
+            try {
+                switch (Utils.toInt(recipe.get("type"))) {
+                    case 0:
+                        String craftingBlock = (String) recipe.get("block");
+                        if (!"crafting_table".equals(craftingBlock)) {
+                            continue;
+                        }
+                        List<Map> outputs = ((List<Map>) recipe.get("output"));
+                        if (outputs.size() > 1) {
+                            continue;
+                        }
+                        Map<String, Object> first = outputs.get(0);
+                        List<Item> sorted = new ArrayList<>();
+                        for (Map<String, Object> ingredient : ((List<Map>) recipe.get("input"))) {
+                            sorted.add(Item.fromVanillaJson(419,ingredient));
+                        }
+                        sorted.sort(recipeComparator);
+
+                        String recipeId = (String) recipe.get("id");
+                        int priority = Utils.toInt(recipe.get("priority"));
+
+                        ShapelessRecipe result = new ShapelessRecipe(recipeId, priority, Item.fromVanillaJson(419,first), sorted);
+
+                        this.registerRecipe(result);
+                        break;
+                    case 1:
+                        craftingBlock = (String) recipe.get("block");
+                        if (!"crafting_table".equals(craftingBlock)) {
+                            continue;
+                        }
+                        outputs = (List<Map>) recipe.get("output");
+
+                        first = outputs.remove(0);
+                        String[] shape = ((List<String>) recipe.get("shape")).toArray(new String[0]);
+                        Map<Character, Item> ingredients = new CharObjectHashMap<>();
+                        List<Item> extraResults = new ArrayList<>();
+
+                        Map<String, Map<String, Object>> input = (Map) recipe.get("input");
+                        for (Map.Entry<String, Map<String, Object>> ingredientEntry : input.entrySet()) {
+                            char ingredientChar = ingredientEntry.getKey().charAt(0);
+                            Item ingredient = Item.fromVanillaJson(419,ingredientEntry.getValue());
+
+                            ingredients.put(ingredientChar, ingredient);
+                        }
+
+                        for (Map<String, Object> data : outputs) {
+                            extraResults.add(Item.fromVanillaJson(419,data));
+                        }
+
+                        recipeId = (String) recipe.get("id");
+                        priority = Utils.toInt(recipe.get("priority"));
+
+                        this.registerRecipe(new ShapedRecipe(recipeId, priority, Item.fromVanillaJson(419,first), shape, ingredients, extraResults));
+                        break;
+                    case 2:
+                    case 3:
+                        craftingBlock = (String) recipe.get("block");
+                        if (!"furnace".equals(craftingBlock)) {
+                            // Ignore other recipes than furnaces
+                            continue;
+                        }
+                        Map<String, Object> resultMap = (Map) recipe.get("output");
+                        Item resultItem = Item.fromVanillaJson(419,resultMap);
+                        Item inputItem;
+                        try {
+                            Map<String, Object> inputMap = (Map) recipe.get("input");
+                            inputItem = Item.fromVanillaJson(419, inputMap);
+                        } catch (Exception old) {
+                            inputItem = Item.get(Utils.toInt(recipe.get("inputId")), recipe.containsKey("inputDamage") ? Utils.toInt(recipe.get("inputDamage")) : -1, 1);
+                        }
+                        this.registerRecipe(new FurnaceRecipe(resultItem, inputItem));
+                        break;
+                    default:
+                        break;
+                }
+            } catch (Exception e) {
+                MainLogger.getLogger().error("Exception during registering (protocol 419) recipe", e);
+            }
+        }
 
         for (Map<String, Object> recipe : recipes_388) {
             try {
@@ -69,7 +151,6 @@ public class CraftingManager {
                     case 0:
                         String craftingBlock = (String) recipe.get("block");
                         if (!"crafting_table".equals(craftingBlock)) {
-                            // Ignore other recipes than crafting table ones
                             continue;
                         }
                         List<Map> outputs = ((List<Map>) recipe.get("output"));
@@ -93,7 +174,6 @@ public class CraftingManager {
                     case 1:
                         craftingBlock = (String) recipe.get("block");
                         if (!"crafting_table".equals(craftingBlock)) {
-                            // Ignore other recipes than crafting table ones
                             continue;
                         }
                         outputs = (List<Map>) recipe.get("output");
