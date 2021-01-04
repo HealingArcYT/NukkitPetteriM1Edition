@@ -309,7 +309,7 @@ public class EntityHuman extends EntityHumanType {
             pk.yaw = (float) this.yaw;
             pk.pitch = (float) this.pitch;
             pk.item = this.getInventory().getItemInHand();
-            pk.metadata = this.dataProperties;
+            pk.metadata = player.protocol < 274 ? mvReplace(this.dataProperties) : this.dataProperties;
             player.dataPacket(pk);
 
             if (this.isPlayer) {

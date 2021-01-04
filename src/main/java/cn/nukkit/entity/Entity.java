@@ -966,7 +966,7 @@ public abstract class Entity extends Location implements Metadatable {
 
     public void spawnTo(Player player) {
         if (!this.hasSpawned.containsKey(player.getLoaderId()) && player.usedChunks.containsKey(Level.chunkHash(this.chunk.getX(), this.chunk.getZ()))) {
-            player.dataPacket(createAddEntityPacket());
+            player.dataPacket(createAddEntityPacket(player.protocol));
             this.hasSpawned.put(player.getLoaderId(), player);
 
             if (this.riding != null) {
@@ -993,6 +993,10 @@ public abstract class Entity extends Location implements Metadatable {
     }
 
     protected DataPacket createAddEntityPacket() {
+        return createAddEntityPacket(ProtocolInfo.CURRENT_PROTOCOL);
+    }
+
+    protected DataPacket createAddEntityPacket(int protocol) {
         AddEntityPacket addEntity = new AddEntityPacket();
         addEntity.type = this.getNetworkId();
         addEntity.entityUniqueId = this.id;
@@ -1006,7 +1010,7 @@ public abstract class Entity extends Location implements Metadatable {
         addEntity.speedX = (float) this.motionX;
         addEntity.speedY = (float) this.motionY;
         addEntity.speedZ = (float) this.motionZ;
-        addEntity.metadata = this.dataProperties;
+        addEntity.metadata = protocol < 274 ? mvReplace(this.dataProperties) : this.dataProperties;
 
         addEntity.links = new EntityLink[this.passengers.size()];
         for (int i = 0; i < addEntity.links.length; i++) {
@@ -1053,7 +1057,10 @@ public abstract class Entity extends Location implements Metadatable {
         player.batchDataPacket(pk);
     }
 
-    private EntityMetadata mvReplace(EntityMetadata data) {
+    /**
+        Replace EntityMetadata IDs for protocol < 274
+     */
+    protected EntityMetadata mvReplace(EntityMetadata data) {
         EntityMetadata updated = new EntityMetadata()
                 .putLong(DATA_FLAGS, data.getLong(DATA_FLAGS))
                 .putShort(DATA_AIR, data.getShort(DATA_AIR))
